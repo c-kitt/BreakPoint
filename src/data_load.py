@@ -1,10 +1,9 @@
-# src/data_load.py
 import pandas as pd
 from pathlib import Path
 from dateutil.parser import parse
 
 RAW_DIR_ATP = Path("data/tennis_atp")
-RAW_DIR_WTA = Path("data/tennis_wtp")  # change to tennis_wta if that's your folder
+RAW_DIR_WTA = Path("data/tennis_wta") 
 OUT = Path("results/matches.parquet")
 
 KEEP = [
@@ -12,12 +11,12 @@ KEEP = [
     "winner_name","loser_name","round"
 ]
 
-def _read_dir(d: Path, tour: str) -> pd.DataFrame:
+def _read_dir(d: Path, tour: str):
     frames = []
     for f in sorted(d.glob("*.csv")):
         df = pd.read_csv(f, low_memory=False)
         missing = [c for c in KEEP if c not in df.columns]
-        if missing:  # skip unexpected files
+        if missing: 
             continue
         df = df[KEEP].copy()
         df["tour"] = tour
@@ -34,19 +33,15 @@ def build_table() -> pd.DataFrame:
     wta = _read_dir(RAW_DIR_WTA, "WTA")
     df = pd.concat([atp, wta], ignore_index=True)
 
-    # Parse date (Jeff’s files use YYYYMMDD integer)
     df["date"] = pd.to_datetime(df["tourney_date"].astype(str), format="%Y%m%d", errors="coerce")
 
-    # Clean names/surface/level
     for col in ["winner_name","loser_name"]:
         df[col] = df[col].map(_norm_name)
-    df["surface"] = df["surface"].str.strip().str.capitalize()  # Hard/Clay/Grass/Carpet/None
+    df["surface"] = df["surface"].str.strip().str.capitalize() 
     df["tourney_level"] = df["tourney_level"].str.strip()
 
-    # Drop rows we can’t use (missing date/names)
     df = df.dropna(subset=["date","winner_name","loser_name"])
 
-    # Build modeling-friendly A/B sides: A = winner, label y=1
     out = pd.DataFrame({
         "date": df["date"],
         "tour": df["tour"],

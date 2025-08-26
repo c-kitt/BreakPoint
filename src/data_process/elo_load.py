@@ -11,8 +11,8 @@ import pandas as pd
 @dataclass
 class EloConfig:
     K: float = 32.0
-    k: float = 0.005
-    alpha: float  = 0.30
+    k: float = 0.004
+    alpha: float  = 0.40
     init_rating: float = 1500.0
     unknown_surface: str = "Unknown"
     

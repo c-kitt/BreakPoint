@@ -84,8 +84,10 @@ def predict_match(engine, player1, player2, surface):
         return 0.5  # Default to 50/50 if error
 
 def get_database_url():
-    """Get PostgreSQL database URL from environment"""
-    return os.environ.get('DATABASE_URL') or os.environ.get('POSTGRES_URL')
+    """Get PostgreSQL database URL from environment or fallback"""
+    return (os.environ.get('DATABASE_URL') or 
+            os.environ.get('POSTGRES_URL') or
+            "postgresql://postgres:ONrDvouWVgjfUVwgZcteRnzVpTTwFpmq@shinkansen.proxy.rlwy.net:33037/railway")
 
 def load_player_data():
     """Load and cache player data from PostgreSQL database"""
@@ -102,16 +104,16 @@ def load_player_data():
         conn = psycopg2.connect(database_url)
         cursor = conn.cursor()
         
-        # Get all players, ordered by name
-        cursor.execute('SELECT name, tour, country, player_id FROM players ORDER BY name')
+        # Get all players, ordered by full name
+        cursor.execute('SELECT full_name, source, player_id FROM players ORDER BY full_name')
         rows = cursor.fetchall()
         
         players = []
-        for name, tour, country, player_id in rows:
+        for full_name, source, player_id in rows:
             players.append({
-                'name': name,
-                'tour': tour,
-                'country': country or '',
+                'name': full_name,
+                'tour': source,
+                'country': '',  # Not available in our schema
                 'player_id': player_id or ''
             })
         
@@ -129,6 +131,21 @@ def load_player_data():
 @app.route('/api/players/names')
 def get_player_names():
     """API endpoint to get just player names as array"""
+    players = load_player_data()
+    if not players:
+        return jsonify({'error': 'No players found in database'}), 500
+    
+    names = [player['name'] for player in players]
+    response = jsonify(names)
+    
+    # Add CORS headers
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    return response
+
+@app.route('/api/players')
+def get_players():
+    """API endpoint to get all player names as array"""
     players = load_player_data()
     if not players:
         return jsonify({'error': 'No players found in database'}), 500

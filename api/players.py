@@ -1,7 +1,5 @@
-from flask import Flask, jsonify
 import json
-
-app = Flask(__name__)
+from http.server import BaseHTTPRequestHandler
 
 # Curated list of top tennis players for Vercel (lightweight)
 PLAYERS = [
@@ -73,16 +71,19 @@ PLAYERS = [
     "Venus Williams"
 ]
 
-def handler(request):
-    """Vercel serverless function handler"""
-    if request.method == 'OPTIONS':
-        return '', 200
+class handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
         
-    try:
-        return jsonify(sorted(PLAYERS))
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# For Vercel
-def main(request):
-    return handler(request)
+        response = json.dumps(sorted(PLAYERS))
+        self.wfile.write(response.encode())
+        
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()

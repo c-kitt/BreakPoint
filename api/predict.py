@@ -1,8 +1,6 @@
-from flask import Flask, request, jsonify
 import json
-import random
-
-app = Flask(__name__)
+import urllib.parse
+from http.server import BaseHTTPRequestHandler
 
 # Simple prediction logic for Vercel (lightweight)
 PLAYER_RATINGS = {
@@ -35,49 +33,64 @@ def get_player_rating(player_name, surface):
     surface_key = surface.lower()
     return player_data.get(surface_key, 1500)
 
-def handler(request):
-    """Vercel serverless function handler"""
-    if request.method == 'OPTIONS':
-        return '', 200
-        
-    if request.method != 'POST':
-        return jsonify({'error': 'Method not allowed'}), 405
+class handler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        try:
+            content_length = int(self.headers.get('Content-Length', 0))
+            post_data = self.rfile.read(content_length)
+            data = json.loads(post_data.decode('utf-8'))
+            
+            player1 = data.get('player1', '')
+            player2 = data.get('player2', '')
+            surface = data.get('surface', 'hard')
+            
+            if not player1 or not player2:
+                self.send_error_response({'error': 'Missing required parameters'}, 400)
+                return
+            
+            # Get ratings for both players on the specified surface
+            rating1 = get_player_rating(player1, surface)
+            rating2 = get_player_rating(player2, surface)
+            
+            # Calculate win probability for player1
+            prob_player1_wins = calculate_win_probability(rating1, rating2)
+            
+            # Determine winner and confidence
+            if prob_player1_wins > 0.5:
+                winner = player1
+                confidence = prob_player1_wins
+            else:
+                winner = player2
+                confidence = 1 - prob_player1_wins
+            
+            response_data = {
+                'winner': winner,
+                'player1': player1,
+                'player2': player2,
+                'surface': surface,
+                'confidence': round(confidence, 3)
+            }
+            
+            self.send_json_response(response_data)
+            
+        except Exception as e:
+            self.send_error_response({'error': str(e)}, 500)
     
-    try:
-        data = request.get_json() if request.get_json() else {}
-        player1 = data.get('player1', '')
-        player2 = data.get('player2', '')
-        surface = data.get('surface', 'hard')
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
+    
+    def send_json_response(self, data, status=200):
+        self.send_response(status)
+        self.send_header('Content-type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
         
-        if not player1 or not player2:
-            return jsonify({'error': 'Missing required parameters'}), 400
-        
-        # Get ratings for both players on the specified surface
-        rating1 = get_player_rating(player1, surface)
-        rating2 = get_player_rating(player2, surface)
-        
-        # Calculate win probability for player1
-        prob_player1_wins = calculate_win_probability(rating1, rating2)
-        
-        # Determine winner and confidence
-        if prob_player1_wins > 0.5:
-            winner = player1
-            confidence = prob_player1_wins
-        else:
-            winner = player2
-            confidence = 1 - prob_player1_wins
-        
-        return jsonify({
-            'winner': winner,
-            'player1': player1,
-            'player2': player2,
-            'surface': surface,
-            'confidence': round(confidence, 3)
-        })
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# For Vercel
-def main(request):
-    return handler(request)
+        response = json.dumps(data)
+        self.wfile.write(response.encode())
+    
+    def send_error_response(self, error_data, status=500):
+        self.send_json_response(error_data, status)

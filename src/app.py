@@ -149,17 +149,16 @@ def health_check():
     return response
 
 @app.route('/')
-def home():
-    """API root endpoint"""
-    return jsonify({
-        'service': 'BreakPoint Tennis Prediction API',
-        'version': '1.0',
-        'endpoints': {
-            '/api/health': 'Health check',
-            '/api/players/names': 'Get all player names',
-            '/api/predict': 'Predict match outcome (POST)'
-        }
-    })
+def serve_frontend():
+    """Serve the frontend HTML file"""
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return send_from_directory(os.path.join(base_dir, 'frontend'), 'index.html')
+
+@app.route('/<path:filename>')
+def serve_static(filename):
+    """Serve static files (CSS, JS) from frontend directory"""
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return send_from_directory(os.path.join(base_dir, 'frontend'), filename)
 
 @app.route('/api/predict', methods=['POST'])
 def predict_winner():

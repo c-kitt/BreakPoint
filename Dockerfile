@@ -14,8 +14,9 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy source code
+# Copy source code and frontend
 COPY src/ ./src/
+COPY frontend/ ./frontend/
 
 # Expose the port
 EXPOSE 8000

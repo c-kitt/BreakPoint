@@ -129,37 +129,12 @@ def load_player_data():
 @app.route('/api/players/names')
 def get_player_names():
     """API endpoint to get just player names as array"""
-    try:
-        players = load_player_data()
-        if players:
-            names = [player['name'] for player in players]
-            response = jsonify(names)
-        else:
-            # Fallback if database is empty
-            raise Exception("No players found in database")
-    except Exception as e:
-        print(f"Database error, using fallback: {e}")
-        # Extended fallback player list if database fails
-        fallback_players = [
-            # Top ATP Players
-            "Novak Djokovic", "Carlos Alcaraz", "Jannik Sinner", "Daniil Medvedev", "Rafael Nadal",
-            "Alexander Zverev", "Andrey Rublev", "Casper Ruud", "Stefanos Tsitsipas", "Taylor Fritz",
-            "Tommy Paul", "Alex de Minaur", "Grigor Dimitrov", "Hubert Hurkacz", "Ben Shelton",
-            "Frances Tiafoe", "Lorenzo Musetti", "Sebastian Korda", "Holger Rune", "Ugo Humbert",
-            "Roger Federer", "Andy Murray", "Stan Wawrinka", "Marin Cilic", "Dominic Thiem",
-            "Karen Khachanov", "Felix Auger-Aliassime", "Matteo Berrettini", "Cameron Norrie", "Denis Shapovalov",
-            "Nick Kyrgios", "Gael Monfils", "Roberto Bautista Agut", "Pablo Carreno Busta", "Diego Schwartzman",
-            "John Isner", "Reilly Opelka", "Milos Raonic", "Kei Nishikori", "David Goffin",
-            
-            # Top WTA Players  
-            "Iga Swiatek", "Aryna Sabalenka", "Coco Gauff", "Jessica Pegula", "Elena Rybakina",
-            "Ons Jabeur", "Marketa Vondrousova", "Karolina Muchova", "Maria Sakkari", "Barbora Krejcikova",
-            "Petra Kvitova", "Caroline Wozniacki", "Madison Keys", "Elise Mertens", "Victoria Azarenka",
-            "Belinda Bencic", "Emma Raducanu", "Leylah Fernandez", "Naomi Osaka", "Simona Halep",
-            "Bianca Andreescu", "Garbiñe Muguruza", "Angelique Kerber", "Serena Williams", "Venus Williams",
-            "Jelena Ostapenko", "Daria Kasatkina", "Veronika Kudermetova", "Anett Kontaveit", "Paula Badosa"
-        ]
-        response = jsonify(sorted(list(set(fallback_players))))  # Remove duplicates
+    players = load_player_data()
+    if not players:
+        return jsonify({'error': 'No players found in database'}), 500
+    
+    names = [player['name'] for player in players]
+    response = jsonify(names)
     
     # Add CORS headers
     response.headers['Access-Control-Allow-Origin'] = '*'

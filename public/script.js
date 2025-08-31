@@ -3,7 +3,7 @@ let playerNames = [];
 // Load all player names on page load
 async function loadPlayerNames() {
     try {
-        const response = await fetch('/api/players');
+        const response = await fetch('https://breakpoint-production.up.railway.app/api/players/names');
         const names = await response.json();
         playerNames = names;
         console.log(`Loaded ${names.length} player names from database`);
@@ -138,7 +138,7 @@ function initializePredictButton() {
             predictButton.textContent = 'Predicting...';
             predictButton.disabled = true;
             
-            const response = await fetch('/api/predict', {
+            const response = await fetch('https://breakpoint-production.up.railway.app/api/predict', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'

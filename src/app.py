@@ -148,9 +148,21 @@ def get_player_names():
     try:
         players = load_player_data()
         names = [player['name'] for player in players]
-        return jsonify(names)
+        response = jsonify(names)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        # Fallback player list if CSV files are missing
+        fallback_players = [
+            "Novak Djokovic", "Carlos Alcaraz", "Jannik Sinner", "Daniil Medvedev", "Rafael Nadal",
+            "Alexander Zverev", "Andrey Rublev", "Casper Ruud", "Stefanos Tsitsipas", "Taylor Fritz",
+            "Roger Federer", "Andy Murray", "Stan Wawrinka", "Marin Cilic", "Dominic Thiem",
+            "Iga Swiatek", "Aryna Sabalenka", "Coco Gauff", "Jessica Pegula", "Elena Rybakina"
+        ]
+        response = jsonify(sorted(fallback_players))
+    
+    # Add CORS headers
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    return response
 
 @app.route('/')
 def serve_frontend():
@@ -193,13 +205,18 @@ def predict_winner():
             winner = player2
             confidence = 1 - prob_player1_wins
         
-        return jsonify({
+        response = jsonify({
             'winner': winner,
             'player1': player1,
             'player2': player2,
             'surface': surface,
             'confidence': round(confidence, 3)
         })
+        
+        # Add CORS headers
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        return response
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500

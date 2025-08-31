@@ -1,6 +1,6 @@
 from flask import Flask, jsonify, send_from_directory, request
 import pandas as pd
-import sqlite3
+import psycopg2
 import os
 import sys
 from pathlib import Path
@@ -83,24 +83,23 @@ def predict_match(engine, player1, player2, surface):
         print(f"Error in prediction: {e}")
         return 0.5  # Default to 50/50 if error
 
-def get_database_path():
-    """Get path to SQLite database"""
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(base_dir, 'data', 'players.db')
+def get_database_url():
+    """Get PostgreSQL database URL from environment"""
+    return os.environ.get('DATABASE_URL') or os.environ.get('POSTGRES_URL')
 
 def load_player_data():
-    """Load and cache player data from SQLite database"""
+    """Load and cache player data from PostgreSQL database"""
     global player_data_cache
     
     if player_data_cache is not None:
         return player_data_cache
     
     try:
-        db_path = get_database_path()
-        if not os.path.exists(db_path):
-            raise FileNotFoundError(f"Database not found at {db_path}")
+        database_url = get_database_url()
+        if not database_url:
+            raise Exception("No DATABASE_URL or POSTGRES_URL environment variable found")
             
-        conn = sqlite3.connect(db_path)
+        conn = psycopg2.connect(database_url)
         cursor = conn.cursor()
         
         # Get all players, ordered by name
@@ -116,14 +115,15 @@ def load_player_data():
                 'player_id': player_id or ''
             })
         
+        cursor.close()
         conn.close()
         
         player_data_cache = players
-        print(f"Loaded {len(players)} players from database")
+        print(f"Loaded {len(players)} players from PostgreSQL database")
         return players
         
     except Exception as e:
-        print(f"Error loading from database: {e}")
+        print(f"Error loading from PostgreSQL database: {e}")
         return []
 
 @app.route('/api/players/names')
@@ -149,16 +149,17 @@ def health_check():
     return response
 
 @app.route('/')
-def serve_frontend():
-    """Serve the frontend HTML file"""
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    return send_from_directory(os.path.join(base_dir, 'frontend'), 'index.html')
-
-@app.route('/<path:filename>')
-def serve_static(filename):
-    """Serve static files (CSS, JS) from frontend directory"""
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    return send_from_directory(os.path.join(base_dir, 'frontend'), filename)
+def home():
+    """API root endpoint"""
+    return jsonify({
+        'service': 'BreakPoint Tennis Prediction API',
+        'version': '1.0',
+        'endpoints': {
+            '/api/health': 'Health check',
+            '/api/players/names': 'Get all player names',
+            '/api/predict': 'Predict match outcome (POST)'
+        }
+    })
 
 @app.route('/api/predict', methods=['POST'])
 def predict_winner():

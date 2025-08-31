@@ -2,22 +2,20 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
+# Install system dependencies for PostgreSQL
+RUN apt-get update && apt-get install -y \
+    gcc \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy requirements first for better caching
 COPY requirements.txt .
 
-# Install dependencies
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy source code and frontend
+# Copy source code
 COPY src/ ./src/
-COPY frontend/ ./frontend/
-COPY public/ ./public/
-
-# Copy the full SQLite database (required)
-COPY data/players.db ./data/players.db
-
-# Verify database exists and show size
-RUN ls -la data/players.db && echo "Database size: $(stat -c%s data/players.db) bytes"
 
 # Expose the port
 EXPOSE 8000

@@ -164,6 +164,13 @@ def get_player_names():
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
     return response
 
+@app.route('/api/health')
+def health_check():
+    """Health check endpoint"""
+    response = jsonify({'status': 'healthy', 'service': 'tennis-prediction-api'})
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    return response
+
 @app.route('/')
 def serve_frontend():
     """Serve the frontend HTML file"""

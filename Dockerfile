@@ -8,17 +8,17 @@ COPY requirements.txt .
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy requirements and source code
-COPY requirements.txt .
+# Copy source code and frontend
 COPY src/ ./src/
 COPY frontend/ ./frontend/
 COPY public/ ./public/
 
-# Copy the SQLite database (much smaller than CSV files)
-COPY data/players.db ./data/players.db
+# Create data directory and copy SQLite database
+RUN mkdir -p data
+COPY data/players.db ./data/
 
 # Verify database exists
-RUN ls -la data/players.db && echo "Database found" || echo "Database not found"
+RUN ls -la data/players.db && echo "Database found: $(stat -c%s data/players.db) bytes" || echo "Database not found"
 
 # Expose the port
 EXPOSE 8000

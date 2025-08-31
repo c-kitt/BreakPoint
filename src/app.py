@@ -1,5 +1,6 @@
 from flask import Flask, jsonify, send_from_directory, request
 import pandas as pd
+import sqlite3
 import os
 import sys
 from pathlib import Path
@@ -82,82 +83,83 @@ def predict_match(engine, player1, player2, surface):
         print(f"Error in prediction: {e}")
         return 0.5  # Default to 50/50 if error
 
+def get_database_path():
+    """Get path to SQLite database"""
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_dir, 'data', 'players.db')
+
 def load_player_data():
-    """Load and cache player data from ATP and WTA CSV files"""
+    """Load and cache player data from SQLite database"""
     global player_data_cache
     
     if player_data_cache is not None:
         return player_data_cache
     
-    # Get the base directory (one level up from src)
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    
-    # Load ATP players
-    atp_path = os.path.join(base_dir, 'data', 'tennis_atp', 'atp_players.csv')
-    atp_players = pd.read_csv(atp_path)
-    
-    # Load WTA players
-    wta_path = os.path.join(base_dir, 'data', 'tennis_wta', 'wta_players.csv')
-    wta_players = pd.read_csv(wta_path)
-    
-    # Combine first and last names and create a list of player names
-    players = []
-    
-    # Process ATP players
-    for _, row in atp_players.iterrows():
-        if pd.notna(row['name_first']) and pd.notna(row['name_last']):
-            first_name = str(row['name_first']).strip()
-            # Skip players with short first names (1-2 characters)
-            if len(first_name) <= 2:
-                continue
-            full_name = f"{first_name} {row['name_last']}"
+    try:
+        db_path = get_database_path()
+        if not os.path.exists(db_path):
+            raise FileNotFoundError(f"Database not found at {db_path}")
+            
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        # Get all players, ordered by name
+        cursor.execute('SELECT name, tour, country, player_id FROM players ORDER BY name')
+        rows = cursor.fetchall()
+        
+        players = []
+        for name, tour, country, player_id in rows:
             players.append({
-                'name': full_name,
-                'tour': 'ATP',
-                'country': row.get('ioc', ''),
-                'player_id': row['player_id']
+                'name': name,
+                'tour': tour,
+                'country': country or '',
+                'player_id': player_id or ''
             })
-    
-    # Process WTA players
-    for _, row in wta_players.iterrows():
-        if pd.notna(row['name_first']) and pd.notna(row['name_last']):
-            first_name = str(row['name_first']).strip()
-            # Skip test entries
-            if row['name_first'] == 'X' and row['name_last'] == 'X':
-                continue
-            # Skip players with short first names (1-2 characters)
-            if len(first_name) <= 2:
-                continue
-            full_name = f"{first_name} {row['name_last']}"
-            players.append({
-                'name': full_name,
-                'tour': 'WTA',
-                'country': row.get('ioc', ''),
-                'player_id': row['player_id']
-            })
-    
-    # Sort players by name
-    players.sort(key=lambda x: x['name'])
-    
-    player_data_cache = players
-    return players
+        
+        conn.close()
+        
+        player_data_cache = players
+        print(f"Loaded {len(players)} players from database")
+        return players
+        
+    except Exception as e:
+        print(f"Error loading from database: {e}")
+        return []
 
 @app.route('/api/players/names')
 def get_player_names():
     """API endpoint to get just player names as array"""
     try:
         players = load_player_data()
-        names = [player['name'] for player in players]
-        response = jsonify(names)
+        if players:
+            names = [player['name'] for player in players]
+            response = jsonify(names)
+        else:
+            # Fallback if database is empty
+            raise Exception("No players found in database")
     except Exception as e:
-        # Fallback player list if CSV files are missing
+        print(f"Database error, using fallback: {e}")
+        # Extended fallback player list if database fails
         fallback_players = [
+            # Top ATP Players
             "Novak Djokovic", "Carlos Alcaraz", "Jannik Sinner", "Daniil Medvedev", "Rafael Nadal",
             "Alexander Zverev", "Andrey Rublev", "Casper Ruud", "Stefanos Tsitsipas", "Taylor Fritz",
+            "Tommy Paul", "Alex de Minaur", "Grigor Dimitrov", "Hubert Hurkacz", "Ben Shelton",
+            "Frances Tiafoe", "Lorenzo Musetti", "Sebastian Korda", "Holger Rune", "Ugo Humbert",
             "Roger Federer", "Andy Murray", "Stan Wawrinka", "Marin Cilic", "Dominic Thiem",
-            "Iga Swiatek", "Aryna Sabalenka", "Coco Gauff", "Jessica Pegula", "Elena Rybakina"
+            "Karen Khachanov", "Felix Auger-Aliassime", "Matteo Berrettini", "Cameron Norrie", "Denis Shapovalov",
+            "Nick Kyrgios", "Gael Monfils", "Roberto Bautista Agut", "Pablo Carreno Busta", "Diego Schwartzman",
+            "John Isner", "Reilly Opelka", "Milos Raonic", "Kei Nishikori", "David Goffin",
+            
+            # Top WTA Players  
+            "Iga Swiatek", "Aryna Sabalenka", "Coco Gauff", "Jessica Pegula", "Elena Rybakina",
+            "Ons Jabeur", "Marketa Vondrousova", "Karolina Muchova", "Maria Sakkari", "Barbora Krejcikova",
+            "Petra Kvitova", "Caroline Wozniacki", "Madison Keys", "Elise Mertens", "Victoria Azarenka",
+            "Belinda Bencic", "Emma Raducanu", "Leylah Fernandez", "Naomi Osaka", "Simona Halep",
+            "Bianca Andreescu", "Garbiñe Muguruza", "Angelique Kerber", "Serena Williams", "Venus Williams",
+            "Jelena Ostapenko", "Daria Kasatkina", "Veronika Kudermetova", "Anett Kontaveit", "Paula Badosa"
         ]
-        response = jsonify(sorted(fallback_players))
+        response = jsonify(sorted(list(set(fallback_players))))  # Remove duplicates
     
     # Add CORS headers
     response.headers['Access-Control-Allow-Origin'] = '*'

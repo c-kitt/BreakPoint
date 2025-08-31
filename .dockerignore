@@ -9,3 +9,5 @@ __pycache__/
 README.md
 .DS_Store
 *.log
+# Keep data directory for CSV files
+# data/

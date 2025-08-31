@@ -1,121 +1,71 @@
 from flask import Flask, request, jsonify
-import pandas as pd
-import os
-import sys
-from pathlib import Path
-
-# Add the project root to path
-sys.path.append(str(Path(__file__).parent.parent))
-
-try:
-    from src.data_process.elo_load import EloConfig, SurfaceAwareElo
-except ImportError:
-    # Fallback if import fails
-    EloConfig = None
-    SurfaceAwareElo = None
+import json
+import random
 
 app = Flask(__name__)
 
-# Global variables for caching
-elo_engine = None
+# Simple prediction logic for Vercel (lightweight)
+PLAYER_RATINGS = {
+    # Top players with basic ratings
+    'Novak Djokovic': {'hard': 2100, 'clay': 2050, 'grass': 2080},
+    'Carlos Alcaraz': {'hard': 2080, 'clay': 2070, 'grass': 2040},
+    'Jannik Sinner': {'hard': 2070, 'clay': 2020, 'grass': 2030},
+    'Daniil Medvedev': {'hard': 2060, 'clay': 1950, 'grass': 2000},
+    'Rafael Nadal': {'hard': 2040, 'clay': 2150, 'grass': 1980},
+    'Alexander Zverev': {'hard': 2050, 'clay': 2040, 'grass': 2010},
+    'Andrey Rublev': {'hard': 2030, 'clay': 2000, 'grass': 1990},
+    'Casper Ruud': {'hard': 2010, 'clay': 2060, 'grass': 1970},
+    'Stefanos Tsitsipas': {'hard': 2020, 'clay': 2030, 'grass': 1980},
+    'Taylor Fritz': {'hard': 2000, 'clay': 1920, 'grass': 1970},
+    'Roger Federer': {'hard': 2020, 'clay': 1980, 'grass': 2100},
+    'Andy Murray': {'hard': 1990, 'clay': 1970, 'grass': 2000}
+}
 
-def load_elo_engine():
-    """Load the Elo engine from processed match data"""
-    global elo_engine
-    
-    if elo_engine is not None:
-        return elo_engine
-    
-    if EloConfig is None or SurfaceAwareElo is None:
-        return None
-    
-    try:
-        # Get the base directory
-        base_dir = Path(__file__).parent.parent
-        
-        # Load the best Elo parameters
-        params_path = base_dir / 'models' / 'elo_best.txt'
-        with open(params_path, 'r') as f:
-            line = f.read().strip()
-            parts = line.split(', ')
-            K = float(parts[0].split('=')[1])
-            k = float(parts[1].split('=')[1])
-            alpha = float(parts[2].split('=')[1])
-        
-        # Create config with best parameters
-        config = EloConfig(K=K, k=k, alpha=alpha)
-        
-        # Build the Elo engine from match data
-        matches_path = base_dir / 'results' / 'matches_main.parquet'
-        df = pd.read_parquet(matches_path)
-        
-        engine = SurfaceAwareElo(config)
-        
-        # Process all matches to build current ratings
-        for _, row in df.iterrows():
-            engine.process_match(str(row["playerA"]), str(row["playerB"]), 
-                               str(row["surface"]), int(row["y"]))
-        
-        elo_engine = engine
-        return engine
-        
-    except Exception as e:
-        print(f"Error loading Elo engine: {e}")
-        return None
+def calculate_win_probability(rating1, rating2):
+    """Calculate win probability using simplified Elo formula"""
+    diff = rating1 - rating2
+    return 1 / (1 + 10 ** (-diff / 400))
 
-def predict_match(engine, player1, player2, surface):
-    """Predict match outcome using Elo ratings"""
-    try:
-        surface_mapping = {
-            'grass': 'Grass',
-            'hard': 'Hard', 
-            'clay': 'Clay'
-        }
-        surface_name = surface_mapping.get(surface.lower(), 'Hard')
-        
-        g1, s1 = engine._get(player1, surface_name)
-        g2, s2 = engine._get(player2, surface_name)
-        
-        delta = (s1 + engine.cfg.alpha * g1) - (s2 + engine.cfg.alpha * g2)
-        prob_player1_wins = engine._prob_from_delta(delta)
-        
-        return prob_player1_wins
-        
-    except Exception as e:
-        return 0.5
+def get_player_rating(player_name, surface):
+    """Get player rating for specific surface"""
+    player_data = PLAYER_RATINGS.get(player_name)
+    if not player_data:
+        return 1500  # Default rating for unknown players
+    
+    surface_key = surface.lower()
+    return player_data.get(surface_key, 1500)
 
 def handler(request):
     """Vercel serverless function handler"""
+    if request.method == 'OPTIONS':
+        return '', 200
+        
     if request.method != 'POST':
         return jsonify({'error': 'Method not allowed'}), 405
     
     try:
-        data = request.get_json()
-        player1 = data.get('player1')
-        player2 = data.get('player2')
-        surface = data.get('surface')
+        data = request.get_json() if request.get_json() else {}
+        player1 = data.get('player1', '')
+        player2 = data.get('player2', '')
+        surface = data.get('surface', 'hard')
         
-        if not player1 or not player2 or not surface:
+        if not player1 or not player2:
             return jsonify({'error': 'Missing required parameters'}), 400
         
-        # Load Elo engine
-        engine = load_elo_engine()
+        # Get ratings for both players on the specified surface
+        rating1 = get_player_rating(player1, surface)
+        rating2 = get_player_rating(player2, surface)
         
-        if engine is None:
-            # Fallback to random prediction if model loading fails
-            import random
-            winner = random.choice([player1, player2])
-            confidence = 0.5
+        # Calculate win probability for player1
+        prob_player1_wins = calculate_win_probability(rating1, rating2)
+        
+        # Determine winner and confidence
+        if prob_player1_wins > 0.5:
+            winner = player1
+            confidence = prob_player1_wins
         else:
-            # Make prediction using Elo ratings
-            prob_player1_wins = predict_match(engine, player1, player2, surface)
-            
-            if prob_player1_wins > 0.5:
-                winner = player1
-                confidence = prob_player1_wins
-            else:
-                winner = player2
-                confidence = 1 - prob_player1_wins
+            winner = player2
+            confidence = 1 - prob_player1_wins
         
         return jsonify({
             'winner': winner,
